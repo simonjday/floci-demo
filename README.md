@@ -41,7 +41,7 @@
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_GITHUB_USERNAME/floci-demo.git
+git clone https://github.com/simonjday/floci-demo.git
 cd floci-demo
 
 # 2. Start Floci
@@ -124,8 +124,7 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) runs the core services 
 - Floci documentation: https://floci.io/floci/
 - Floci GitHub: https://github.com/floci-io/floci
 - Floci Docker Hub: https://hub.docker.com/r/floci/floci
-- Medium post (demo walkthrough): [your Medium URL]
-- Companion technical overview: [link to your overview doc]
+
 
 ---
 
