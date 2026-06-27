@@ -1,0 +1,23 @@
+# Floci persisted state — never commit this
+data/
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfplan
+
+# Lambda build artefacts
+lambda/**/__pycache__/
+lambda/**/*.pyc
+lambda/**/*.zip
+/tmp/
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp

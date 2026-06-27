@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  demo-tests:
+    name: Floci demo scripts
+    runs-on: ubuntu-latest          # Linux runner — Docker socket available natively
+
+    env:
+      AWS_ENDPOINT_URL:       http://localhost:4566
+      AWS_DEFAULT_REGION:     eu-west-1
+      AWS_ACCESS_KEY_ID:      test
+      AWS_SECRET_ACCESS_KEY:  test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start Floci
+        run: |
+          # Use memory mode in CI — fastest startup, no persistence overhead
+          FLOCI_STORAGE_MODE=memory docker compose up -d
+          echo "Waiting for Floci..."
+          until curl -sf http://localhost:4566/_localstack/health; do sleep 1; done
+          echo "Floci is ready"
+
+      - name: Install AWS CLI v2
+        run: |
+          curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+          unzip -q awscliv2.zip
+          sudo ./aws/install --update
+          aws --version
+
+      - name: 01 — Core services
+        run: bash scripts/01-core-services.sh
+
+      - name: 02 — EventBridge pipeline (Lambda)
+        run: bash scripts/02-eventbridge-pipeline.sh
+
+      - name: 03 — Step Functions
+        run: bash scripts/03-step-functions.sh
+
+      - name: 04 — Multi-account isolation
+        run: bash scripts/04-multi-account.sh
+
+      - name: 08 — Athena SQL
+        run: bash scripts/08-athena.sh
+
+      # RDS, MSK, ECR, and EKS require Docker-in-Docker or privileged mode;
+      # skipped in CI by default — run locally against Docker Desktop.
+      # Uncomment below if your runner supports privileged containers:
+      #
+      # - name: 05 — RDS PostgreSQL
+      #   run: bash scripts/05-rds-postgres.sh
+      #
+      # - name: 06 — ECR
+      #   run: bash scripts/06-ecr.sh
+      #
+      # - name: 07 — MSK Kafka
+      #   run: bash scripts/07-msk-kafka.sh
+
+      - name: Floci logs (on failure)
+        if: failure()
+        run: docker compose logs floci
+
+      - name: Stop Floci
+        if: always()
+        run: docker compose down

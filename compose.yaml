@@ -1,0 +1,21 @@
+services:
+  floci:
+    image: floci/floci:latest          # native GraalVM binary, ~90 MB
+    platform: linux/arm64              # explicit for M3 / Apple Silicon — avoids Rosetta
+    ports:
+      - "4566:4566"                    # unified endpoint for all 65 services
+      - "4510-4520:4510-4520"          # RDS, ElastiCache, MSK direct connection ports
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # required: Lambda, RDS, MSK, ECS, EKS, OpenSearch
+      - ./data:/app/data               # persisted state directory
+    environment:
+      FLOCI_STORAGE_MODE: hybrid       # in-memory perf + 5s async flush to ./data
+      FLOCI_HOSTNAME: floci            # ensures returned service URLs resolve correctly in compose
+      FLOCI_DEFAULT_REGION: eu-west-1  # change to match your preferred test region
+    user: root                         # required for Docker socket access
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 2s
