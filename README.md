@@ -23,6 +23,8 @@
 | `08-athena.sh` | Athena, Glue, S3 | Real SQL via DuckDB sidecar |
 | `09-persistence.sh` | All stateful services | State survival across restarts |
 | `10-terraform.sh` | S3, SQS, DynamoDB | IaC provider override |
+| `11-ecs.sh` | ECS | Real Docker task |
+| `12-eks.sh` | EKS | Real k3s cluster |
 
 ---
 
@@ -34,6 +36,7 @@
 | AWS CLI | v2 | `brew install awscli` |
 | Terraform | 1.10+ | Optional — only for script 10 |
 | psql | Any | Optional — only for script 05 |
+| kubectl | Any | Optional — only for script 12's EKS verification |
 
 ---
 
@@ -139,6 +142,7 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) runs the core services 
 | `describe-db-instances` reports an `Address` like `172.18.0.2` | That's the backing container's internal Docker network IP, not host-reachable | Always connect via `localhost:<reported-port>`, never the `Address` field — `05-rds-postgres.sh` does this automatically |
 | `kcat: ... Connection setup timed out` / `All broker connections are down` on script 07 | Floci doesn't publish a host port for the Kafka broker (confirmed via `docker ps` — no `0.0.0.0:` binding on the Redpanda container, unlike RDS/ElastiCache) | Not fixable via `localhost`. `07-msk-kafka.sh` now uses `rpk` (Redpanda's own CLI) via `docker exec` directly inside the broker container — no host client needed, and it avoids the amd64-only `kcat` Docker image running under Rosetta emulation on Apple Silicon |
 | `Binder Error: No function matches ... substr(DATE, ...)` on script 08 | Real fidelity gap, not a Floci bug: Athena's Presto/Trino engine implicitly casts `DATE` for string functions like `SUBSTR`; Floci's DuckDB-backed Athena doesn't | Cast explicitly: `SUBSTR(CAST(date AS VARCHAR), 1, 7)` — valid in both engines |
+| `kubectl` gets `401 Unauthorized` or can't reach the EKS cluster on script 12 | Confirmed open upstream bug in Floci — [issue #1118](https://github.com/floci-io/floci/issues/1118): the AWS-shaped API doesn't surface a host-reachable endpoint or usable client credentials for real-mode EKS clusters | Not a bug in this repo. `12-eks.sh` already works around it via `docker exec` to extract the real admin kubeconfig from the k3s container directly — no action needed unless that workaround itself fails, in which case check `docker ps` for the `rancher/k3s` container manually |
 | Script hangs at a `(END)` / `less` prompt | AWS CLI v2 pipes output through a pager whenever stdout is a TTY | Press `q` to unstick it; `00-setup.sh` sets `AWS_PAGER=""` so re-sourcing it prevents recurrence |
 
 ---
