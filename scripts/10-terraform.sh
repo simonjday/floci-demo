@@ -6,8 +6,11 @@
 # Requires: terraform >= 1.10
 #   brew install terraform
 #
-# Floci passes all 14 Terraform compatibility tests in the upstream test suite.
-# This script provisions real Terraform-managed resources against local Floci.
+# This script runs against the same Terraform init/plan/apply/destroy cycle
+# used by Floci's own compat-terraform compatibility module (see
+# github.com/floci-io/floci-compatibility-tests). I could not confirm a
+# specific pass/fail test count in Floci's public docs or repos, so avoid
+# citing one — verify current coverage claims at floci.io if you need them.
 
 set -euo pipefail
 

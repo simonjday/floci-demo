@@ -13,7 +13,7 @@ source "$(dirname "$0")/00-setup.sh"
 ACCOUNT_ID=000000000000
 REGION=${AWS_DEFAULT_REGION}
 REPO_NAME=demo/app
-REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.localhost:5000"
+REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.localhost:5100"
 
 echo ""
 echo "═══════════════════════════════════════"

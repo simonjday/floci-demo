@@ -20,7 +20,7 @@ echo "════════════════════════�
 echo "  S3"
 echo "═══════════════════════════════════════"
 
-aws s3 mb s3://floci-demo-bucket
+aws s3 mb s3://floci-demo-bucket 2>/dev/null || echo "  (bucket already exists)"
 echo "hello from floci" | aws s3 cp - s3://floci-demo-bucket/hello.txt
 echo '{"event":"order.placed","orderId":"abc-123"}' \
   | aws s3 cp - s3://floci-demo-bucket/events/001.json
@@ -36,7 +36,7 @@ echo "  SQS — Standard queue with DLQ"
 echo "═══════════════════════════════════════"
 
 # Create DLQ first
-aws sqs create-queue --queue-name orders-dlq
+aws sqs create-queue --queue-name orders-dlq 2>/dev/null || echo "  (queue already exists)"
 
 DLQ_ARN=$(aws sqs get-queue-attributes \
   --queue-url "${AWS_ENDPOINT_URL}/${ACCOUNT_ID}/orders-dlq" \
@@ -46,7 +46,8 @@ DLQ_ARN=$(aws sqs get-queue-attributes \
 # Create main queue with redrive policy
 aws sqs create-queue \
   --queue-name orders \
-  --attributes "{\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"${DLQ_ARN}\\\",\\\"maxReceiveCount\\\":\\\"3\\\"}\"}"
+  --attributes "{\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"${DLQ_ARN}\\\",\\\"maxReceiveCount\\\":\\\"3\\\"}\"}" \
+  2>/dev/null || echo "  (queue already exists)"
 
 # Send a message
 aws sqs send-message \
@@ -76,7 +77,8 @@ echo "════════════════════════�
 
 aws sqs create-queue \
   --queue-name payments.fifo \
-  --attributes FifoQueue=true,ContentBasedDeduplication=true
+  --attributes FifoQueue=true,ContentBasedDeduplication=true \
+  2>/dev/null || echo "  (queue already exists)"
 
 aws sqs send-message \
   --queue-url "${AWS_ENDPOINT_URL}/${ACCOUNT_ID}/payments.fifo" \
@@ -112,7 +114,7 @@ aws dynamodb create-table \
       ],
       "Projection":{"ProjectionType":"ALL"}
     }
-  ]'
+  ]' 2>/dev/null || echo "  (table already exists)"
 
 # Put items
 aws dynamodb put-item --table-name orders \
@@ -157,14 +159,15 @@ aws dynamodb query \
   --expression-attribute-values '{":cid":{"S":"cust-1"}}' \
   --query 'Items[*].{order:orderId.S, status:status.S, createdAt:createdAt.S}'
 
-# Conditional update
+# Conditional update — expected to no-op on re-runs once status is already PROCESSING
 aws dynamodb update-item \
   --table-name orders \
   --key '{"orderId":{"S":"abc-123"}}' \
   --update-expression "SET #s = :new_status" \
   --condition-expression "#s = :old_status" \
   --expression-attribute-names '{"#s":"status"}' \
-  --expression-attribute-values '{":new_status":{"S":"PROCESSING"},":old_status":{"S":"PLACED"}}'
+  --expression-attribute-values '{":new_status":{"S":"PROCESSING"},":old_status":{"S":"PLACED"}}' \
+  2>/dev/null || echo "  (already PROCESSING from a prior run — condition check correctly skipped it)"
 
 echo "✓ DynamoDB — table, GSI, GetItem, Query, conditional Update"
 
@@ -192,7 +195,8 @@ echo "════════════════════════�
 
 aws secretsmanager create-secret \
   --name demo/app/credentials \
-  --secret-string '{"apiKey":"sk-floci-test-key","endpoint":"http://api.internal","timeout":30}'
+  --secret-string '{"apiKey":"sk-floci-test-key","endpoint":"http://api.internal","timeout":30}' \
+  2>/dev/null || echo "  (secret already exists)"
 
 aws secretsmanager get-secret-value \
   --secret-id demo/app/credentials \

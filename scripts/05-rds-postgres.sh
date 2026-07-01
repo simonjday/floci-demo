@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# 05-rds-postgres.sh — RDS PostgreSQL via real Docker container
+# 05-rds-postgres.sh — RDS PostgreSQL, real Docker backend
 #
-# Source: https://floci.io/floci/services/rds/
-#
-# Floci starts a real postgres:16-alpine container.
-# First run pulls the image — may take a minute depending on connection speed.
 # Requires psql to be installed for the connection test:
 #   brew install libpq && brew link --force libpq
 
@@ -55,11 +51,60 @@ DB_ENDPOINT=$(aws rds describe-db-instances \
 echo ""
 echo "  Endpoint: ${DB_ENDPOINT}"
 
-DB_HOST=$(echo "${DB_ENDPOINT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['Address'])")
+# The Address field is the Postgres container's internal Docker network IP —
+# not reachable from the host. Floci publishes the real connection point on
+# localhost via the port range mapped in compose.yaml (7001-7099), so always
+# connect through localhost on the reported port, never the Address field.
+REPORTED_ADDRESS=$(echo "${DB_ENDPOINT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['Address'])")
+DB_HOST=localhost
 DB_PORT=$(echo "${DB_ENDPOINT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['Port'])")
 
-echo "  Host: ${DB_HOST}"
+echo "  Host (from API, informational only): ${REPORTED_ADDRESS}"
+echo "  Host (actually connecting via):       ${DB_HOST}"
 echo "  Port: ${DB_PORT}"
+
+# "available" from the AWS-shaped API reflects container health, not
+# necessarily that Floci's internal proxy has finished wiring the
+# localhost:<port> -> container route yet. Poll the actual TCP port before
+# handing off to psql, rather than trusting the API status alone — this
+# avoids a race where the connection is accepted then immediately dropped
+# ("server closed the connection unexpectedly").
+echo ""
+echo "  Waiting for proxy port to accept connections..."
+
+# Floci's Postgres protocol handler doesn't support the GSSENCRequest
+# preamble that libpq sends by default (gssencmode=prefer) before the real
+# startup packet — it logs "Unexpected PostgreSQL startup protocol version:
+# 80,877,104" and drops the connection instead of declining and continuing,
+# the way real Postgres does. Disable GSS negotiation client-side so both
+# the readiness probe and the real connection send a plain startup packet.
+export PGGSSENCMODE=disable
+
+PROXY_READY=0
+for i in $(seq 1 15); do
+  if command -v pg_isready &> /dev/null; then
+    if pg_isready -h "${DB_HOST}" -p "${DB_PORT}" -t 2 &> /dev/null; then
+      PROXY_READY=1
+      break
+    fi
+  else
+    # Fallback with no extra dependency: raw TCP probe via bash's /dev/tcp
+    if (exec 3<>"/dev/tcp/${DB_HOST}/${DB_PORT}") 2>/dev/null; then
+      exec 3<&- 3>&-
+      PROXY_READY=1
+      break
+    fi
+  fi
+  sleep 1
+done
+
+if [[ "${PROXY_READY}" -eq 1 ]]; then
+  echo "✓ Proxy port responding (took ${i}s after 'available' status)"
+else
+  echo "  Proxy port still not responding after 15s — connection attempt below will likely fail."
+  echo "  If it does, this points to a real Floci issue rather than a simple startup race:"
+  echo "    docker logs floci-demo-floci-1 --tail 50"
+fi
 
 echo ""
 echo "  Testing connection via psql..."
@@ -101,16 +146,5 @@ echo ""
 echo "  Describe instance summary:"
 aws rds describe-db-instances \
   --db-instance-identifier "${DB_ID}" \
-  --query 'DBInstances[0].{
-    id:DBInstanceIdentifier,
-    status:DBInstanceStatus,
-    engine:Engine,
-    engineVersion:EngineVersion,
-    endpoint:Endpoint.Address,
-    port:Endpoint.Port
-  }' --output table
-
-echo ""
-echo "═══════════════════════════════════════"
-echo "  ✅  RDS PostgreSQL demo complete"
-echo "═══════════════════════════════════════"
+  --query 'DBInstances[0].{Id:DBInstanceIdentifier,Engine:Engine,Status:DBInstanceStatus,Endpoint:Endpoint}' \
+  --output table

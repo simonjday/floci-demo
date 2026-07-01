@@ -82,9 +82,13 @@ echo "  Lambda direct invocation test"
 echo "═══════════════════════════════════════"
 
 # First invocation pulls the runtime image — may take a moment
+# --cli-binary-format is required: AWS CLI v2 defaults to treating --payload
+# as pre-base64-encoded, so raw JSON here would otherwise be passed through
+# unmodified and the Lambda runtime would fail with Runtime.UnmarshalError.
 echo "  Invoking Lambda (first call may pull runtime image)..."
 aws lambda invoke \
   --function-name order-processor \
+  --cli-binary-format raw-in-base64-out \
   --payload '{"Records":[{"body":"{\"orderId\":\"direct-001\",\"amount\":42.00,\"customerId\":\"cust-1\"}"}]}' \
   /tmp/lambda-out.json > /dev/null
 cat /tmp/lambda-out.json

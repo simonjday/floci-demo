@@ -23,6 +23,7 @@
 | `08-athena.sh` | Athena, Glue, S3 | Real SQL via DuckDB sidecar |
 | `09-persistence.sh` | All stateful services | State survival across restarts |
 | `10-terraform.sh` | S3, SQS, DynamoDB | IaC provider override |
+| `99-cleanup.sh` | — | Full reset: stops Floci, wipes persisted state |
 
 ---
 
@@ -59,6 +60,8 @@ bash scripts/02-eventbridge-pipeline.sh
 docker compose down
 ```
 
+> **Before running script 02 or 10:** `02-eventbridge-pipeline.sh` expects `lambda/order_processor/handler.py` to already exist, and `10-terraform.sh` expects `terraform/main.tf` to already exist — neither script creates these files for you. See `floci-demo-guide.md` Steps 4 and 12 for the exact content to create.
+
 ---
 
 ## Architecture
@@ -66,8 +69,10 @@ docker compose down
 ```
 compose.yaml
 └── floci/floci:latest (arm64 native binary, ~90 MB)
-    ├── :4566   → all 65 AWS service endpoints
-    └── :4510-4520 → RDS / ElastiCache / MSK direct ports
+    ├── :4566   → all AWS service endpoints[^svc-count]
+    ├── :6379-6399 → ElastiCache / Redis proxy ports
+    ├── :7001-7099 → RDS proxy ports
+    └── :5100-5199 → ECR registry sidecar (separate container, do not remap)
 
 In-process services (fast, no Docker child):
   SQS · SNS · S3 · DynamoDB · Kinesis · SSM · Secrets Manager
@@ -91,6 +96,8 @@ Real Docker containers (high-fidelity):
 Sidecar:
   Athena + CUR → floci-duck (DuckDB) for real SQL execution
 ```
+
+[^svc-count]: Floci's own sources disagree on the exact service count depending on page and date — floci.io's homepage has stated 65 and 25 on different pages; the GitHub org page (most recently checked) states 41 with "1,925/1,925" SDK tests passing. Treat the number as directionally "several dozen and growing," and check https://floci.io/floci/services/ for the current figure rather than citing one from this README.
 
 ---
 
