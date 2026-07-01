@@ -116,3 +116,8 @@ echo "════════════════════════�
 echo ""
 echo "  Cluster is left running for inspection. Manual cleanup, if you want it:"
 echo "    aws eks delete-cluster --name ${EKS_CLUSTER}"
+echo ""
+echo "  To use your Mac's own kubectl against this cluster:"
+echo "    export KUBECONFIG=${KUBECONFIG_FILE:-/tmp/floci-eks-${EKS_CLUSTER}-kubeconfig.yaml}"
+echo "    kubectl get nodes"
+echo "  See README.md 'Connecting kubectl to the EKS demo cluster' for persisting this."

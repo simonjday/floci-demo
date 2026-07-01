@@ -64,6 +64,33 @@ docker compose down
 
 ---
 
+## Connecting kubectl to the EKS demo cluster
+
+`12-eks.sh` extracts a working kubeconfig to `/tmp/floci-eks-demo-eks-kubeconfig.yaml`, already pointed at the k3s container's host-published port — no manual cert wrangling needed. Your Mac's own `kubectl` (not a containerized one) can use it directly:
+
+```bash
+export KUBECONFIG=/tmp/floci-eks-demo-eks-kubeconfig.yaml
+kubectl get nodes
+kubectl get pods,svc
+```
+
+That export only applies to the current shell. To make it persistent:
+
+**Merge it into your default kubeconfig** (adds it as a context alongside your other clusters, so plain `kubectl` works without exporting anything):
+```bash
+KUBECONFIG=~/.kube/config:/tmp/floci-eks-demo-eks-kubeconfig.yaml \
+  kubectl config view --flatten > /tmp/merged-kubeconfig.yaml
+mv /tmp/merged-kubeconfig.yaml ~/.kube/config
+kubectl config get-contexts   # confirm the floci-eks context is there
+kubectl config use-context <floci-eks-context-name>
+```
+
+**Or** just keep the `export` in your shell profile if you're only using this cluster for the demo.
+
+**Stale port caveat:** the k3s container's host port (from the `6500-6599` range) is assigned per-container. If it's ever recreated — `docker compose down/up`, `--force-recreate`, or a restart — it may come back on a *different* port, and the extracted kubeconfig will point at a stale one. If `kubectl get nodes` starts failing with a connection error (rather than `401`), that's almost certainly why — just re-run `bash scripts/12-eks.sh`, which re-extracts a fresh kubeconfig against the current port.
+
+---
+
 ## Architecture
 
 ```
