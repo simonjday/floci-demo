@@ -55,6 +55,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_data" {
   rule {
     id     = "expire-old-versions"
     status = "Enabled"
+    filter {} # applies to the whole bucket — required since provider v4+ to disambiguate scope
     noncurrent_version_expiration {
       noncurrent_days = 30
     }
