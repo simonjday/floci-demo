@@ -122,6 +122,10 @@ echo ""
 echo "═══════════════════════════════════════"
 echo "  Running Athena queries (DuckDB executes against S3)"
 echo "═══════════════════════════════════════"
+echo "  Note: real Athena's Presto/Trino engine implicitly casts DATE to"
+echo "  VARCHAR in string functions like SUBSTR; DuckDB does not — this is"
+echo "  a genuine SQL-dialect fidelity gap, not a Floci bug. The 'Monthly"
+echo "  trend' query below casts explicitly to work on both engines."
 
 run_query \
   "Revenue by product" \
@@ -133,7 +137,7 @@ run_query \
 
 run_query \
   "Monthly trend" \
-  "SELECT SUBSTR(date,1,7) as month, SUM(revenue) as monthly_revenue FROM ${TABLE_NAME} GROUP BY SUBSTR(date,1,7) ORDER BY month"
+  "SELECT SUBSTR(CAST(date AS VARCHAR),1,7) as month, SUM(revenue) as monthly_revenue FROM ${TABLE_NAME} GROUP BY SUBSTR(CAST(date AS VARCHAR),1,7) ORDER BY month"
 
 run_query \
   "Top product per region" \
