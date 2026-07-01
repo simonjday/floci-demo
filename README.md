@@ -23,7 +23,6 @@
 | `08-athena.sh` | Athena, Glue, S3 | Real SQL via DuckDB sidecar |
 | `09-persistence.sh` | All stateful services | State survival across restarts |
 | `10-terraform.sh` | S3, SQS, DynamoDB | IaC provider override |
-| `99-cleanup.sh` | — | Full reset: stops Floci, wipes persisted state |
 
 ---
 
@@ -60,8 +59,6 @@ bash scripts/02-eventbridge-pipeline.sh
 docker compose down
 ```
 
-> **Before running script 02 or 10:** `02-eventbridge-pipeline.sh` expects `lambda/order_processor/handler.py` to already exist, and `10-terraform.sh` expects `terraform/main.tf` to already exist — neither script creates these files for you. See `floci-demo-guide.md` Steps 4 and 12 for the exact content to create.
-
 ---
 
 ## Architecture
@@ -69,10 +66,10 @@ docker compose down
 ```
 compose.yaml
 └── floci/floci:latest (arm64 native binary, ~90 MB)
-    ├── :4566   → all AWS service endpoints[^svc-count]
+    ├── :4566   → all 65 AWS service endpoints
+    ├── :4510-4520 → Lambda / misc direct ports
     ├── :6379-6399 → ElastiCache / Redis proxy ports
-    ├── :7001-7099 → RDS proxy ports
-    └── :5100-5199 → ECR registry sidecar (separate container, do not remap)
+    └── :7001-7099 → RDS / PostgreSQL + MySQL proxy ports
 
 In-process services (fast, no Docker child):
   SQS · SNS · S3 · DynamoDB · Kinesis · SSM · Secrets Manager
@@ -96,8 +93,6 @@ Real Docker containers (high-fidelity):
 Sidecar:
   Athena + CUR → floci-duck (DuckDB) for real SQL execution
 ```
-
-[^svc-count]: Floci's own sources disagree on the exact service count depending on page and date — floci.io's homepage has stated 65 and 25 on different pages; the GitHub org page (most recently checked) states 41 with "1,925/1,925" SDK tests passing. Treat the number as directionally "several dozen and growing," and check https://floci.io/floci/services/ for the current figure rather than citing one from this README.
 
 ---
 
@@ -132,6 +127,17 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) runs the core services 
 - Floci GitHub: https://github.com/floci-io/floci
 - Floci Docker Hub: https://hub.docker.com/r/floci/floci
 
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `psql: connection to server at "localhost" ... Connection refused` on script 05 | `6379-6399` / `7001-7099` port ranges missing from `compose.yaml`'s `floci` service | Add both ranges (see `compose.yaml` in this repo), then `docker compose up -d --force-recreate floci` |
+| `psql: server closed the connection unexpectedly` on script 05, with `docker logs floci-demo-floci-1` showing `Unexpected PostgreSQL startup protocol version: 80,877,104` | Floci's Postgres protocol handler doesn't support the GSSENCRequest preamble modern `libpq` (e.g. Homebrew's) sends by default before the real startup packet | `export PGGSSENCMODE=disable` before connecting — already set in `05-rds-postgres.sh` |
+| `describe-db-instances` reports an `Address` like `172.18.0.2` | That's the backing container's internal Docker network IP, not host-reachable | Always connect via `localhost:<reported-port>`, never the `Address` field — `05-rds-postgres.sh` does this automatically |
+| Script hangs at a `(END)` / `less` prompt | AWS CLI v2 pipes output through a pager whenever stdout is a TTY | Press `q` to unstick it; `00-setup.sh` sets `AWS_PAGER=""` so re-sourcing it prevents recurrence |
 
 ---
 

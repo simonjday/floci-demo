@@ -1,24 +1,25 @@
 services:
   floci:
-    image: floci/floci:latest          # native arm64 binary, ~90 MB
-    platform: linux/arm64              # explicit for M3 — avoids Rosetta emulation
+    image: floci/floci:latest          # native GraalVM binary, ~90 MB
+    platform: linux/arm64              # explicit for M3 / Apple Silicon — avoids Rosetta
     ports:
-      - "4566:4566"                    # single unified endpoint for all AWS API calls
+      - "4566:4566"                    # unified endpoint for all 65 services
       - "4510-4520:4510-4520"          # Lambda / misc direct connection ports
       - "6379-6399:6379-6399"          # ElastiCache / Redis proxy ports
       - "7001-7099:7001-7099"          # RDS / PostgreSQL + MySQL proxy ports
       # ECR uses its own sidecar container bound to 5100-5199 by default —
       # do NOT add that range here, it will conflict with the sidecar
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock   # required for Lambda, RDS, MSK, ECS, EKS
-      - ./data:/app/data               # persistent state survives container restarts
+      - /var/run/docker.sock:/var/run/docker.sock  # required: Lambda, RDS, MSK, ECS, EKS, OpenSearch
+      - ./data:/app/data               # persisted state directory
     environment:
       FLOCI_STORAGE_MODE: hybrid       # in-memory perf + 5s async flush to ./data
-      FLOCI_HOSTNAME: floci            # ensures returned URLs resolve correctly inside compose
-      FLOCI_DEFAULT_REGION: eu-west-1  # override if you prefer us-east-1
+      FLOCI_HOSTNAME: floci            # ensures returned service URLs resolve correctly in compose
+      FLOCI_DEFAULT_REGION: eu-west-1  # change to match your preferred test region
     user: root                         # required for Docker socket access
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 20
+      start_period: 2s
