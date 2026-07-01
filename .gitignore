@@ -21,3 +21,7 @@ lambda/**/*.zip
 .idea/
 .vscode/
 *.swp
+
+# LocalStack comparison docs — separate evaluation workstream, not part of
+# the Floci demo; keep these local, don't publish to this repo
+localstack-*.md
