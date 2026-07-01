@@ -80,7 +80,7 @@ In-process services (fast, no Docker child):
 Real Docker containers (high-fidelity):
   Lambda    → public.ecr.aws/lambda/<runtime>
   RDS       → postgres:16-alpine / mysql:8.0 / mariadb:11
-  MSK       → redpandadata/redpanda:latest
+  MSK       → redpandadata/redpanda:latest  (Docker-network-only — no host port, see Troubleshooting)
   ElastiCache → valkey/valkey:8
   Neptune   → tinkerpop/gremlin-server:3.7.3
   DocumentDB → mongo:7.0
@@ -88,7 +88,7 @@ Real Docker containers (high-fidelity):
   EKS       → rancher/k3s:latest
   OpenSearch → opensearchproject/opensearch:2
   CodeBuild → user environment image
-  ECR       → registry:2
+  ECR       → registry:2  (self-publishes its own host port, e.g. 5100)
 
 Sidecar:
   Athena + CUR → floci-duck (DuckDB) for real SQL execution
@@ -137,6 +137,7 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) runs the core services 
 | `psql: connection to server at "localhost" ... Connection refused` on script 05 | `6379-6399` / `7001-7099` port ranges missing from `compose.yaml`'s `floci` service | Add both ranges (see `compose.yaml` in this repo), then `docker compose up -d --force-recreate floci` |
 | `psql: server closed the connection unexpectedly` on script 05, with `docker logs floci-demo-floci-1` showing `Unexpected PostgreSQL startup protocol version: 80,877,104` | Floci's Postgres protocol handler doesn't support the GSSENCRequest preamble modern `libpq` (e.g. Homebrew's) sends by default before the real startup packet | `export PGGSSENCMODE=disable` before connecting — already set in `05-rds-postgres.sh` |
 | `describe-db-instances` reports an `Address` like `172.18.0.2` | That's the backing container's internal Docker network IP, not host-reachable | Always connect via `localhost:<reported-port>`, never the `Address` field — `05-rds-postgres.sh` does this automatically |
+| `kcat: ... Connection setup timed out` / `All broker connections are down` on script 07 | Floci doesn't publish a host port for the Kafka broker (confirmed via `docker ps` — no `0.0.0.0:` binding on the Redpanda container, unlike RDS/ElastiCache) | Not fixable via `localhost`. `07-msk-kafka.sh` now uses `rpk` (Redpanda's own CLI) via `docker exec` directly inside the broker container — no host client needed, and it avoids the amd64-only `kcat` Docker image running under Rosetta emulation on Apple Silicon |
 | Script hangs at a `(END)` / `less` prompt | AWS CLI v2 pipes output through a pager whenever stdout is a TTY | Press `q` to unstick it; `00-setup.sh` sets `AWS_PAGER=""` so re-sourcing it prevents recurrence |
 
 ---
